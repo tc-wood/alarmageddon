@@ -32,8 +32,8 @@ export default function SettingsScreen() {
           </ThemedText>
           <Slider
             style={styles.slider}
-            minimumValue={1}
-            maximumValue={5}
+            minimumValue={3}
+            maximumValue={10}
             step={1}
             value={alarmDistance}
             onValueChange={setAlarmDistance}

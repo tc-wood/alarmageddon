@@ -8,7 +8,7 @@ interface SettingsContextType {
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
 
 export function SettingsProvider({ children }: { children: React.ReactNode }) {
-  const [alarmDistance, setAlarmDistance] = useState(1); // Default 1m
+  const [alarmDistance, setAlarmDistance] = useState(3); // Default 3m
 
   return (
     <SettingsContext.Provider value={{ alarmDistance, setAlarmDistance }}>
