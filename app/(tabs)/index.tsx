@@ -9,7 +9,7 @@ import * as Notifications from 'expo-notifications'
 import { Audio } from 'expo-av';
 import { AlarmButton } from '@/components/alarm/AlarmButton';
 import DateTimePicker from '@react-native-community/datetimepicker';
-
+import { calculateDistance } from '@/utils/location';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -61,7 +61,6 @@ export default function HomeScreen() {
     return () => { state.sound?.unloadAsync(); };
   }, [state.sound]);
 
-  // Location checking interval
   useEffect(() => {
     if (!state.isActive) return;
     const interval = setInterval(checkLocation, 5000);
@@ -126,7 +125,6 @@ export default function HomeScreen() {
       );
 
       if (distance > 0.5) {
-        // First stop and unload the sound
         if (state.sound) {
           try {
             await state.sound.stopAsync();
@@ -136,10 +134,8 @@ export default function HomeScreen() {
           }
         }
 
-        // Then cancel notifications and update state
         await Notifications.cancelAllScheduledNotificationsAsync();
         
-        // Send dismissal notification
         await Notifications.scheduleNotificationAsync({
           content: {
             title: "Alarm Dismissed!",
@@ -149,7 +145,6 @@ export default function HomeScreen() {
           trigger: null,
         });
 
-        // Finally update state
         setState(prev => ({
           ...prev,
           isActive: false,
@@ -163,6 +158,11 @@ export default function HomeScreen() {
     }
   };
 
+  const cancelAlarm = async () => {
+    await Notifications.cancelAllScheduledNotificationsAsync();
+    setState(prev => ({ ...prev, scheduledTime: null }));
+  };
+
   return (
     <ParallaxScrollView
       headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
@@ -172,7 +172,6 @@ export default function HomeScreen() {
           style={styles.reactLogo}
         />
       }>
-      <AlarmButton> </AlarmButton>
     </ParallaxScrollView>
   );
 }
