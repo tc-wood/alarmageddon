@@ -8,6 +8,7 @@ import * as Location from 'expo-location'
 import * as Notifications from 'expo-notifications'
 import { Audio } from 'expo-av';
 import { AlarmButton } from '@/components/alarm/AlarmButton';
+import { AlarmStatus } from '@/components/alarm/AlarmStatus';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { calculateDistance } from '@/utils/location';
 
@@ -163,34 +164,79 @@ export default function HomeScreen() {
     setState(prev => ({ ...prev, scheduledTime: null }));
   };
 
-  return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-    </ParallaxScrollView>
-  );
+  const renderAlarmStatus = () => {
+    if (!state.isActive && !state.scheduledTime) {
+      return (
+        <ThemedView style={styles.buttonContainer}>
+          {Platform.OS === 'android' && (
+            <ThemedText style={styles.timeText}>
+              {state.selectedTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </ThemedText>
+          )}
+
+          {Platform.OS === 'ios' ? (
+            <DateTimePicker
+              value={state.selectedTime}
+              mode="time"
+              is24Hour={true}
+              onChange={(_, date) => {
+                setState(prev => ({
+                  ...prev,
+                  selectedTime: date || prev.selectedTime
+                }));
+              }}
+              style={[styles.picker, { transform: [{ scale: 1.3 }] }]}
+            />
+          ) : (
+            <AlarmButton 
+              onPress={() => setState(prev => ({ ...prev, showPicker: true }))}
+              text="Select Time"
+              icon="time-outline"
+              size="large"
+            />
+          )}
+
+          {Platform.OS === 'android' && state.showPicker && (
+            <DateTimePicker
+              value={state.selectedTime}
+              mode="time"
+              is24Hour={true}
+              onChange={(_, date) => {
+                setState(prev => ({
+                  ...prev,
+                  showPicker: false,
+                  selectedTime: date || prev.selectedTime
+                }));
+              }}
+            />
+          )}
+
+          <AlarmButton 
+            onPress={scheduleAlarm}
+            text="Start Alarm"
+            variant="secondary"
+          />
+        </ThemedView>
+      );
+    }
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
+  container: {
+    flex: 1,
     alignItems: 'center',
-    gap: 8,
+    justifyContent: 'center',
+    padding: 20,
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
+  buttonContainer: {
+    alignItems: 'center',
+    marginTop: 20,
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+  timeText: {
+    fontSize: 24,
+    marginTop: 10,
+  },
+  picker: {
+    marginTop: 10,
   },
 });
