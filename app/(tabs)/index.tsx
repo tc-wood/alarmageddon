@@ -1,23 +1,22 @@
-import { Image, StyleSheet, Platform } from 'react-native';
-import { useState, useEffect, useCallback } from 'react';
-import { HelloWave } from '@/components/HelloWave';
-import ParallaxScrollView from '@/components/ParallaxScrollView';
-import { ThemedText } from '@/components/ThemedText';
-import { ThemedView } from '@/components/ThemedView';
-import * as Location from 'expo-location'
-import * as Notifications from 'expo-notifications'
-import { Audio } from 'expo-av';
-import { AlarmButton } from '@/components/alarm/AlarmButton';
-import { AlarmStatus } from '@/components/alarm/AlarmStatus';
-import DateTimePicker from '@react-native-community/datetimepicker';
-import { calculateDistance } from '@/utils/location';
+import { useState, useEffect, useCallback } from "react";
+import { StyleSheet, Platform } from "react-native";
+import * as Location from "expo-location";
+import * as Notifications from "expo-notifications";
+import { Audio } from "expo-av";
+import DateTimePicker from "@react-native-community/datetimepicker";
+import { ThemedText } from "@/components/ThemedText";
+import { ThemedView } from "@/components/ThemedView";
+import { AlarmButton } from "@/components/alarm/AlarmButton";
+import { AlarmStatus } from "@/components/alarm/AlarmStatus";
+import { calculateDistance } from "@/utils/location";
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
     shouldPlaySound: true,
     shouldSetBadge: false,
-  })
+    priority: Notifications.AndroidNotificationPriority.MAX,
+  }),
 });
 
 interface AlarmState {
@@ -29,9 +28,7 @@ interface AlarmState {
   showPicker: boolean;
 }
 
-
-
-export default function HomeScreen() {
+export default function AlarmScreen() {
   const [state, setState] = useState<AlarmState>({
     isActive: false,
     initialLocation: null,
@@ -46,20 +43,46 @@ export default function HomeScreen() {
       try {
         const [locationStatus, notificationStatus] = await Promise.all([
           Location.requestForegroundPermissionsAsync(),
-          Notifications.requestPermissionsAsync()
+          Notifications.requestPermissionsAsync(),
         ]);
-        
-        if (locationStatus.status !== 'granted' || !notificationStatus.granted) {
-          alert('Location and notification permissions are required');
+
+        if (
+          locationStatus.status !== "granted" ||
+          !notificationStatus.granted
+        ) {
+          alert("Location and notification permissions are required");
         }
       } catch (error) {
-        console.error('Permission error:', error);
+        console.error("Permission error:", error);
       }
     })();
   }, []);
 
+  const cleanupSound = async (sound: Audio.Sound | null) => {
+    if (!sound) return;
+
+    try {
+      try {
+        await sound.stopAsync();
+      } catch (error) {}
+
+      try {
+        await sound.unloadAsync();
+      } catch (error) {}
+    } catch (error) {
+      console.error("Sound cleanup error:", error);
+    }
+  };
+
   useEffect(() => {
-    return () => { state.sound?.unloadAsync(); };
+    let isMounted = true;
+
+    return () => {
+      isMounted = false;
+      if (state.sound) {
+        void cleanupSound(state.sound);
+      }
+    };
   }, [state.sound]);
 
   useEffect(() => {
@@ -72,29 +95,32 @@ export default function HomeScreen() {
     try {
       const now = new Date();
       const scheduledTime = new Date();
-      
+
       scheduledTime.setHours(state.selectedTime.getHours());
       scheduledTime.setMinutes(state.selectedTime.getMinutes());
       scheduledTime.setSeconds(0);
-      
+
       if (scheduledTime.getTime() <= now.getTime()) {
         scheduledTime.setDate(scheduledTime.getDate() + 1);
       }
 
       const location = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High
+        accuracy: Location.Accuracy.High,
       });
-      
-      setState(prev => ({ ...prev, initialLocation: location, scheduledTime }));
-      
+
+      setState((prev) => ({
+        ...prev,
+        initialLocation: location,
+        scheduledTime,
+      }));
+
+      const timeUntilAlarm = scheduledTime.getTime() - now.getTime();
       setTimeout(async () => {
         const { sound } = await Audio.Sound.createAsync(
-          require('@/assets/sounds/alarm.mp3'),
+          require("@/assets/sounds/alarm.mp3"),
           { isLooping: true, shouldPlay: true }
         );
-        
-        setState(prev => ({ ...prev, sound, isActive: true }));
-        
+
         await Notifications.scheduleNotificationAsync({
           content: {
             title: "Wake Up!",
@@ -103,21 +129,25 @@ export default function HomeScreen() {
           },
           trigger: null,
         });
-      }, scheduledTime.getTime() - now.getTime());
+
+        // Update state
+        setState((prev) => ({ ...prev, sound, isActive: true }));
+      }, timeUntilAlarm);
     } catch (error) {
-      console.error('Alarm error:', error);
-      alert('Failed to set alarm');
+      console.error("Alarm error:", error);
+      alert("Failed to set alarm");
     }
   }, [state.selectedTime]);
 
+  // Update the checkLocation function
   const checkLocation = async () => {
     if (!state.initialLocation || !state.sound) return;
-    
+
     try {
       const currentLocation = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High
+        accuracy: Location.Accuracy.High,
       });
-      
+
       const distance = calculateDistance(
         state.initialLocation.coords.latitude,
         state.initialLocation.coords.longitude,
@@ -126,17 +156,9 @@ export default function HomeScreen() {
       );
 
       if (distance > 0.5) {
-        if (state.sound) {
-          try {
-            await state.sound.stopAsync();
-            await state.sound.unloadAsync();
-          } catch (error) {
-            console.error('Sound cleanup error:', error);
-          }
-        }
+        await cleanupSound(state.sound);
 
         await Notifications.cancelAllScheduledNotificationsAsync();
-        
         await Notifications.scheduleNotificationAsync({
           content: {
             title: "Alarm Dismissed!",
@@ -146,75 +168,81 @@ export default function HomeScreen() {
           trigger: null,
         });
 
-        setState(prev => ({
+        setState((prev) => ({
           ...prev,
           isActive: false,
           initialLocation: null,
           sound: null,
-          scheduledTime: null
+          scheduledTime: null,
         }));
       }
     } catch (error) {
-      console.error('Location check error:', error);
+      console.error("Location check error:", error);
     }
   };
 
   const cancelAlarm = async () => {
     await Notifications.cancelAllScheduledNotificationsAsync();
-    setState(prev => ({ ...prev, scheduledTime: null }));
+    setState((prev) => ({ ...prev, scheduledTime: null }));
   };
 
   const renderAlarmStatus = () => {
     if (!state.isActive && !state.scheduledTime) {
       return (
         <ThemedView style={styles.buttonContainer}>
-          {Platform.OS === 'android' && (
+          {Platform.OS === "android" && (
             <ThemedText style={styles.timeText}>
-              {state.selectedTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              {state.selectedTime.toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
             </ThemedText>
           )}
 
-          {Platform.OS === 'ios' ? (
+          {Platform.OS === "ios" ? (
             <DateTimePicker
               value={state.selectedTime}
               mode="time"
               is24Hour={true}
               onChange={(_, date) => {
-                setState(prev => ({
+                setState((prev) => ({
                   ...prev,
-                  selectedTime: date || prev.selectedTime
+                  selectedTime: date || prev.selectedTime,
                 }));
               }}
               style={[styles.picker, { transform: [{ scale: 1.3 }] }]}
             />
           ) : (
-            <AlarmButton 
-              onPress={() => setState(prev => ({ ...prev, showPicker: true }))}
+            <AlarmButton
+              onPress={() =>
+                setState((prev) => ({ ...prev, showPicker: true }))
+              }
               text="Select Time"
               icon="time-outline"
               size="large"
             />
           )}
 
-          {Platform.OS === 'android' && state.showPicker && (
+          {Platform.OS === "android" && state.showPicker && (
             <DateTimePicker
               value={state.selectedTime}
               mode="time"
               is24Hour={true}
               onChange={(_, date) => {
-                setState(prev => ({
+                setState((prev) => ({
                   ...prev,
                   showPicker: false,
-                  selectedTime: date || prev.selectedTime
+                  selectedTime: date || prev.selectedTime,
                 }));
               }}
             />
           )}
 
-          <AlarmButton 
+          <AlarmButton
             onPress={scheduleAlarm}
             text="Start Alarm"
             variant="secondary"
+            textStyle={styles.startButtonText}
           />
         </ThemedView>
       );
@@ -224,7 +252,7 @@ export default function HomeScreen() {
       return (
         <ThemedView style={styles.buttonContainer}>
           <AlarmStatus type="scheduled" time={state.scheduledTime} />
-          <AlarmButton 
+          <AlarmButton
             onPress={cancelAlarm}
             text="Cancel Alarm"
             variant="danger"
@@ -247,12 +275,12 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     padding: 20,
   },
   buttonContainer: {
-    alignItems: 'center',
+    alignItems: "center",
     marginTop: 20,
   },
   timeText: {
@@ -261,5 +289,9 @@ const styles = StyleSheet.create({
   },
   picker: {
     marginTop: 10,
+  },
+  startButtonText: {
+    fontSize: 20,
+    fontWeight: "bold",
   },
 });
