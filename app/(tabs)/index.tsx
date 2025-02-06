@@ -219,6 +219,29 @@ export default function HomeScreen() {
         </ThemedView>
       );
     }
+
+    if (!state.isActive && state.scheduledTime) {
+      return (
+        <ThemedView style={styles.buttonContainer}>
+          <AlarmStatus type="scheduled" time={state.scheduledTime} />
+          <AlarmButton 
+            onPress={cancelAlarm}
+            text="Cancel Alarm"
+            variant="danger"
+          />
+        </ThemedView>
+      );
+    }
+
+    return <AlarmStatus type="active" />;
+  };
+
+  return (
+    <ThemedView style={styles.container}>
+      <ThemedText type="title">Alarmageddon</ThemedText>
+      {renderAlarmStatus()}
+    </ThemedView>
+  );
 }
 
 const styles = StyleSheet.create({

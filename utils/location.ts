@@ -8,5 +8,5 @@ export function calculateDistance(lat1: number, lon1: number, lat2: number, lon2
     const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
             Math.cos(φ1) * Math.cos(φ2) *
             Math.sin(Δλ/2) * Math.sin(Δλ/2);
-    return 6371e3 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
   } 
