@@ -57,6 +57,17 @@ export default function HomeScreen() {
     })();
   }, []);
 
+  useEffect(() => {
+    return () => { state.sound?.unloadAsync(); };
+  }, [state.sound]);
+
+  // Location checking interval
+  useEffect(() => {
+    if (!state.isActive) return;
+    const interval = setInterval(checkLocation, 5000);
+    return () => clearInterval(interval);
+  }, [state.isActive]);
+
   const scheduleAlarm = useCallback(async () => {
     try {
       const now = new Date();
@@ -98,6 +109,59 @@ export default function HomeScreen() {
       alert('Failed to set alarm');
     }
   }, [state.selectedTime]);
+
+  const checkLocation = async () => {
+    if (!state.initialLocation || !state.sound) return;
+    
+    try {
+      const currentLocation = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High
+      });
+      
+      const distance = calculateDistance(
+        state.initialLocation.coords.latitude,
+        state.initialLocation.coords.longitude,
+        currentLocation.coords.latitude,
+        currentLocation.coords.longitude
+      );
+
+      if (distance > 0.5) {
+        // First stop and unload the sound
+        if (state.sound) {
+          try {
+            await state.sound.stopAsync();
+            await state.sound.unloadAsync();
+          } catch (error) {
+            console.error('Sound cleanup error:', error);
+          }
+        }
+
+        // Then cancel notifications and update state
+        await Notifications.cancelAllScheduledNotificationsAsync();
+        
+        // Send dismissal notification
+        await Notifications.scheduleNotificationAsync({
+          content: {
+            title: "Alarm Dismissed!",
+            body: "You've successfully moved and dismissed the alarm",
+            sound: true,
+          },
+          trigger: null,
+        });
+
+        // Finally update state
+        setState(prev => ({
+          ...prev,
+          isActive: false,
+          initialLocation: null,
+          sound: null,
+          scheduledTime: null
+        }));
+      }
+    } catch (error) {
+      console.error('Location check error:', error);
+    }
+  };
 
   return (
     <ParallaxScrollView
