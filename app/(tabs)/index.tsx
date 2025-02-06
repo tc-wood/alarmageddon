@@ -1,13 +1,15 @@
 import { Image, StyleSheet, Platform } from 'react-native';
-
+import { useState, useEffect, useCallback } from 'react';
 import { HelloWave } from '@/components/HelloWave';
 import ParallaxScrollView from '@/components/ParallaxScrollView';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
-import * as Location from '@react-native-community/datetimepicker'
+import * as Location from 'expo-location'
 import * as Notifications from 'expo-notifications'
 import { Audio } from 'expo-av';
 import { AlarmButton } from '@/components/alarm/AlarmButton';
+import DateTimePicker from '@react-native-community/datetimepicker';
+
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -29,6 +31,74 @@ interface AlarmState {
 
 
 export default function HomeScreen() {
+  const [state, setState] = useState<AlarmState>({
+    isActive: false,
+    initialLocation: null,
+    sound: null,
+    scheduledTime: null,
+    selectedTime: new Date(),
+    showPicker: false,
+  });
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const [locationStatus, notificationStatus] = await Promise.all([
+          Location.requestForegroundPermissionsAsync(),
+          Notifications.requestPermissionsAsync()
+        ]);
+        
+        if (locationStatus.status !== 'granted' || !notificationStatus.granted) {
+          alert('Location and notification permissions are required');
+        }
+      } catch (error) {
+        console.error('Permission error:', error);
+      }
+    })();
+  }, []);
+
+  const scheduleAlarm = useCallback(async () => {
+    try {
+      const now = new Date();
+      const scheduledTime = new Date();
+      
+      scheduledTime.setHours(state.selectedTime.getHours());
+      scheduledTime.setMinutes(state.selectedTime.getMinutes());
+      scheduledTime.setSeconds(0);
+      
+      if (scheduledTime.getTime() <= now.getTime()) {
+        scheduledTime.setDate(scheduledTime.getDate() + 1);
+      }
+
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High
+      });
+      
+      setState(prev => ({ ...prev, initialLocation: location, scheduledTime }));
+      
+      setTimeout(async () => {
+        const { sound } = await Audio.Sound.createAsync(
+          require('@/assets/sounds/alarm.mp3'),
+          { isLooping: true, shouldPlay: true }
+        );
+        
+        setState(prev => ({ ...prev, sound, isActive: true }));
+        
+        await Notifications.scheduleNotificationAsync({
+          content: {
+            title: "Wake Up!",
+            body: "Move to a different location to dismiss the alarm",
+            sound: true,
+          },
+          trigger: null,
+        });
+      }, scheduledTime.getTime() - now.getTime());
+    } catch (error) {
+      console.error('Alarm error:', error);
+      alert('Failed to set alarm');
+    }
+  }, [state.selectedTime]);
+
   return (
     <ParallaxScrollView
       headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
