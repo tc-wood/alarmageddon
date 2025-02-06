@@ -12,4 +12,4 @@ credits:
 - [christina chung](https://github.com/christina-chung)
 - [tom wood](https://github.com/tc-wood)
 - [brahim bouharri](https://github.com/bouharri)
-- [kadri kurtulus](https://github.com/kadriucl)
+- [kadri kurtul](https://github.com/kadriucl)
