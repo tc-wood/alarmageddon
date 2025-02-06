@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { StyleSheet, Platform } from "react-native";
+import { StyleSheet, Platform, Image } from "react-native";
 import * as Location from "expo-location";
 import * as Notifications from "expo-notifications";
 import { Audio } from "expo-av";
@@ -9,6 +9,8 @@ import { ThemedView } from "@/components/ThemedView";
 import { AlarmButton } from "@/components/alarm/AlarmButton";
 import { AlarmStatus } from "@/components/alarm/AlarmStatus";
 import { calculateDistance } from "@/utils/location";
+import ParallaxScrollView from '@/components/ParallaxScrollView';
+import { useSettings } from '@/app/context/SettingsContext';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -29,6 +31,7 @@ interface AlarmState {
 }
 
 export default function AlarmScreen() {
+  const { alarmDistance } = useSettings();
   const [state, setState] = useState<AlarmState>({
     isActive: false,
     initialLocation: null,
@@ -121,16 +124,21 @@ export default function AlarmScreen() {
           { isLooping: true, shouldPlay: true }
         );
 
+        await Notifications.cancelAllScheduledNotificationsAsync();
+        
         await Notifications.scheduleNotificationAsync({
           content: {
-            title: "Wake Up!",
-            body: "Move to a different location to dismiss the alarm",
+            title: "Time to move!",
+            body: "Move to a different location to dismiss the alarm.",
             sound: true,
           },
-          trigger: null,
+          trigger: {
+            type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+            seconds: 1,
+            repeats: false,
+          },
         });
 
-        // Update state
         setState((prev) => ({ ...prev, sound, isActive: true }));
       }, timeUntilAlarm);
     } catch (error) {
@@ -139,7 +147,6 @@ export default function AlarmScreen() {
     }
   }, [state.selectedTime]);
 
-  // Update the checkLocation function
   const checkLocation = async () => {
     if (!state.initialLocation || !state.sound) return;
 
@@ -155,7 +162,7 @@ export default function AlarmScreen() {
         currentLocation.coords.longitude
       );
 
-      if (distance > 0.5) {
+      if (distance > alarmDistance) {
         await cleanupSound(state.sound);
 
         await Notifications.cancelAllScheduledNotificationsAsync();
@@ -165,7 +172,11 @@ export default function AlarmScreen() {
             body: "You've successfully moved and dismissed the alarm",
             sound: true,
           },
-          trigger: null,
+          trigger: {
+            type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+            seconds: 1,
+            repeats: false,
+          },
         });
 
         setState((prev) => ({
@@ -264,11 +275,36 @@ export default function AlarmScreen() {
     return <AlarmStatus type="active" />;
   };
 
+  const renderAlarmContent = () => {
+    return (
+      <ThemedView style={styles.container}>
+        <ThemedView style={styles.titleContainer}>
+          <ThemedText type="title" lightColor="black" darkColor="#f5b3a4">Alarmageddon</ThemedText>
+          <ThemedText type="subtitle" style={styles.subtitle} lightColor="#black" darkColor="white">
+            An increasingly-annoying alarm that only shuts up when you get up.
+          </ThemedText>
+        </ThemedView>
+        {renderAlarmStatus()}
+      </ThemedView>
+    );
+  };
+
   return (
-    <ThemedView style={styles.container}>
-      <ThemedText type="title">Alarmageddon</ThemedText>
-      {renderAlarmStatus()}
-    </ThemedView>
+    <ParallaxScrollView
+      headerBackgroundColor={{ light: "#f09580", dark: "#f09580" }}
+      headerImage={
+        <ThemedView style={styles.headerImageContainer}>
+          <ThemedView style={[styles.imageWrapper, { backgroundColor: 'transparent' }]}>
+            <Image
+              source={require("@/assets/images/icon.png")}
+              style={[styles.headerImage, { opacity: 0.8 }]}
+              resizeMode="contain"
+            />
+          </ThemedView>
+        </ThemedView>
+      }>
+      {renderAlarmContent()}
+    </ParallaxScrollView>
   );
 }
 
@@ -276,7 +312,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     alignItems: "center",
-    justifyContent: "center",
+    justifyContent: "flex-start",
     padding: 20,
   },
   buttonContainer: {
@@ -293,5 +329,30 @@ const styles = StyleSheet.create({
   startButtonText: {
     fontSize: 20,
     fontWeight: "bold",
+  },
+  headerImageContainer: {
+    position: 'absolute',
+    bottom: -90,
+    left: -35,
+    backgroundColor: 'transparent',
+  },
+  imageWrapper: {
+    width: 310,
+    height: 310,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'transparent',
+  },
+  headerImage: {
+    width: '100%',
+    height: '100%',
+  },
+  titleContainer: {
+    alignItems: 'center',
+    marginTop: 20,
+  },
+  subtitle: {
+    textAlign: 'center',
+    marginTop: 16,
   },
 });
